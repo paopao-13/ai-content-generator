@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI内容生成工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 {
+            color: #2b6cb0;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .nav {
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #2b6cb0;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2d3748;
+        }
+        select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        select:focus, textarea:focus {
+            outline: none;
+            border-color: #2b6cb0;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .btn {
+            background: #2b6cb0;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #1a4f8a; }
+        .btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+        .result-box {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            min-height: 100px;
+        }
+        .result-box:empty::before {
+            content: '生成结果将显示在这里...';
+            color: #a0aec0;
+        }
+        .status-msg {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #718096;
+        }
+        .template-info {
+            background: #ebf8ff;
+            border-left: 4px solid #2b6cb0;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #2b6cb0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI内容生成工具</h1>
+        <p class="subtitle">基于LLM API的多模板内容生成与批量处理</p>
+        
+        <div class="nav">
+            <a href="/history">查看历史记录 ></a>
+        </div>
+        
+        <div class="card">
+            <div class="form-group">
+                <label>选择生成模板</label>
+                <select id="template">
+                    {% for key, value in templates.items() %}
+                    <option value="{{ key }}">{{ value.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="template-info" id="templateInfo">
+                选择模板后，这里会显示该模板的说明
+            </div>
+            
+            <div class="form-group">
+                <label>输入内容描述</label>
+                <textarea id="userInput" placeholder="例如：一款无线蓝牙耳机，降噪功能强，续航30小时..."></textarea>
+            </div>
+            
+            <button class="btn" id="generateBtn" onclick="generate()">生成内容</button>
+            <p class="status-msg" id="statusMsg"></p>
+            
+            <div class="result-box" id="result"></div>
+        </div>
+    </div>
+    
+    <script>
+        const templates = {{ templates | tojson }};
+        
+        document.getElementById('template').addEventListener('change', function() {
+            const key = this.value;
+            const info = templates[key].system_prompt;
+            document.getElementById('templateInfo').textContent = info;
+        });
+        
+        // 初始化显示第一个模板
+        document.getElementById('templateInfo').textContent = templates.product_title.system_prompt;
+        
+        async function generate() {
+            const btn = document.getElementById('generateBtn');
+            const status = document.getElementById('statusMsg');
+            const result = document.getElementById('result');
+            
+            const template = document.getElementById('template').value;
+            const input = document.getElementById('userInput').value.trim();
+            
+            if (!input) {
+                status.textContent = '请先输入内容描述';
+                status.style.color = '#e53e3e';
+                return;
+            }
+            
+            btn.disabled = true;
+            status.textContent = '正在生成中...';
+            status.style.color = '#2b6cb0';
+            
+            try {
+                const res = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ template, input })
+                });
+                
+                const data = await res.json();
+                
+                if (data.error) {
+                    status.textContent = data.error;
+                    status.style.color = '#e53e3e';
+                } else {
+                    result.textContent = data.result;
+                    status.textContent = `生成成功！已保存到历史记录（ID: ${data.id}）`;
+                    status.style.color = '#38a169';
+                }
+            } catch (err) {
+                status.textContent = '请求失败：' + err.message;
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
